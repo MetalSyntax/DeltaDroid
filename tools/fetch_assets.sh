@@ -1,8 +1,11 @@
 #!/bin/bash
-# Baja los núcleos libretro (arm64) y extrae las skins .deltaskin del IPA de Delta.
-# Uso: tools/fetch_assets.sh /ruta/Delta_1_6.ipa
+# Baja los núcleos libretro (arm64). Las skins "Classic" originales ya están en el repo.
+# Opcional, SOLO para compilaciones personales: con la ruta a tu propio IPA de Delta reemplaza las skins
+# por las Standard de Delta y agrega su base de títulos. Esos archivos no tienen licencia para
+# redistribuirse: no publiques un APK compilado así.
+# Uso: tools/fetch_assets.sh [/ruta/Delta.ipa]
 set -euo pipefail
-IPA="${1:?Uso: $0 /ruta/Delta.ipa}"
+IPA="${1:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LIBS="$ROOT/app/src/main/jniLibs/arm64-v8a"; SKINS="$ROOT/app/src/main/assets/skins"
 mkdir -p "$LIBS" "$SKINS"
@@ -16,6 +19,8 @@ for core in fceumm snes9x gambatte mgba mupen64plus_next_gles3 melonds genesis_p
   unzip -p "$TMP/c.zip" "${core}_libretro_android.so" > "$out"
 done
 
+[ -z "$IPA" ] && exit 0
+echo "Uso personal: skins y base de Delta (no redistribuir)"
 # Base de títulos/carátulas por SHA-1 que usa Delta
 unzip -p "$IPA" Payload/Delta.app/openvgdb.sqlite > "$ROOT/app/src/main/assets/openvgdb.sqlite"
 

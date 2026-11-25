@@ -3,7 +3,6 @@ build/
 local.properties
 .idea/
 *.iml
-# Núcleos libretro y skins de Delta: se generan con tools/fetch_assets.sh, no se versionan
+# Núcleos libretro: se bajan con tools/fetch_assets.sh; base de Delta opcional (uso personal)
 app/src/main/jniLibs/
-app/src/main/assets/skins/
 app/src/main/assets/openvgdb.sqlite

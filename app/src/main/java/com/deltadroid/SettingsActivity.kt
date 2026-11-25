@@ -218,7 +218,7 @@ class SettingsActivity : ComponentActivity() {
             items(skins, key = { it.file.name }) { skin ->
                 ListItem(
                     headlineContent = { Text(skin.name) },
-                    supportingContent = { Text(if (skin.file.name == "standard.deltaskin") "Incluida (Delta)" else skin.file.name) },
+                    supportingContent = { Text(if (skin.file.name == "standard.deltaskin") "Incluida" else skin.file.name) },
                     leadingContent = { RadioButton(active == skin.file.name, { SkinStore.choose(this@SettingsActivity, s, null, skin.file.name); active = skin.file.name }) },
                     trailingContent = {
                         if (skin.file.name != "standard.deltaskin") IconButton({ SkinStore.delete(this@SettingsActivity, s, skin); refresh++ }) {
