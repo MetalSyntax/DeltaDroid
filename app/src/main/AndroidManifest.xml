@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature android:glEsVersion="0x00030000" android:required="false" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="DeltaDroid"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:extractNativeLibs="true">
+        <activity android:name=".LibraryActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- configChanges: rotar no reinicia la emulación; SkinView se re-maqueta sola -->
+        <activity
+            android:name=".GameActivity"
+            android:theme="@style/Game"
+            android:screenOrientation="fullSensor"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" />
+    </application>
+</manifest>
