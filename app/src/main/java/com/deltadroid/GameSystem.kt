@@ -1,8 +1,6 @@
 package com.deltadroid
 
-import android.content.Context
 import android.view.KeyEvent.*
-import java.io.File
 
 private val common = mapOf(
     "up" to KEYCODE_DPAD_UP, "down" to KEYCODE_DPAD_DOWN,
@@ -41,16 +39,6 @@ enum class GameSystem(
     /** GB y GBC comparten página (como en Delta) pero no repo de carátulas. */
     fun thumbRepo(fileName: String) =
         if (this == GBC && fileName.endsWith(".gb", true)) "Nintendo_-_Game_Boy" else thumbs
-
-    /** Skin activa: la importada por el usuario o, si no hay, la Standard de Delta incluida en assets. */
-    fun skinFile(ctx: Context): File {
-        val f = File(ctx.filesDir, "skins/$id.deltaskin")
-        if (!f.exists()) {
-            f.parentFile!!.mkdirs()
-            ctx.assets.open("skins/$id.deltaskin").use { i -> f.outputStream().use { i.copyTo(it) } }
-        }
-        return f
-    }
 
     companion object {
         fun byExt(fileName: String) = fileName.substringAfterLast('.', "").lowercase()

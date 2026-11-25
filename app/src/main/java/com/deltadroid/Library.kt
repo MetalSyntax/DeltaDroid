@@ -7,7 +7,10 @@ import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 
-data class Game(val file: File, val system: GameSystem, val title: String, val covers: List<String>)
+/** covers: File (carátula propia) o URL, en orden de preferencia. */
+data class Game(val file: File, val system: GameSystem, val title: String, val covers: List<Any>) {
+    val srm get() = File(file.parentFile!!.parentFile, "saves/${file.name}.srm")
+}
 
 /** ROMs importadas + título/carátula: openvgdb (la base de Delta, por SHA-1) y libretro-thumbnails (por nombre No-Intro). */
 object Library {
@@ -22,15 +25,30 @@ object Library {
         else lookup(ctx, f).also { metaFile.parentFile!!.mkdirs(); metaFile.writeText(it.toString()) }
         val libretro = "https://raw.githubusercontent.com/libretro-thumbnails/${system.thumbRepo(f.name)}" +
             "/master/Named_Boxarts/${Uri.encode(libretroName(f.nameWithoutExtension))}.png"
-        Game(f, system, meta.optString("title").ifEmpty { cleanTitle(f.nameWithoutExtension) },
-            listOfNotNull(libretro, meta.optString("cover").ifEmpty { null }))
+        val custom = File(ctx.filesDir, "covers/${f.name}").takeIf { it.exists() }
+        Game(f, system, meta.optString("customTitle").ifEmpty { meta.optString("title") }.ifEmpty { cleanTitle(f.nameWithoutExtension) },
+            listOfNotNull(custom, libretro, meta.optString("cover").ifEmpty { null }))
     }.sortedBy { it.title.lowercase() }
 
     fun delete(ctx: Context, game: Game) {
+        val n = game.file.name
         game.file.delete()
         metaFile(ctx, game.file).delete()
-        File(ctx.filesDir, "saves/${game.file.name}.srm").delete()
-        File(ctx.filesDir, "states/${game.file.name}.state").delete()
+        game.srm.delete()
+        File(ctx.filesDir, "states/$n").deleteRecursively()
+        File(ctx.filesDir, "cheats/$n.json").delete()
+        File(ctx.filesDir, "covers/$n").delete()
+        Prefs.of(ctx).edit().remove("skin_rom_$n").apply()
+    }
+
+    /** Título propio (vacío = volver al de la base de datos). */
+    fun rename(ctx: Context, game: Game, title: String) = updateMeta(ctx, game.file) { put("customTitle", title.trim()) }
+
+    private fun updateMeta(ctx: Context, rom: File, block: JSONObject.() -> Unit) {
+        val f = metaFile(ctx, rom)
+        val o = if (f.exists()) JSONObject(f.readText()) else JSONObject()
+        f.parentFile!!.mkdirs()
+        f.writeText(o.apply(block).toString())
     }
 
     private fun lookup(ctx: Context, rom: File): JSONObject {

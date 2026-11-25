@@ -35,37 +35,8 @@ object Prefs {
     fun of(ctx: Context) = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
     fun haptics(ctx: Context) = of(ctx).getBoolean("haptics", true)
     fun opacity(ctx: Context) = of(ctx).getFloat("opacity", 0.7f)
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SettingsSheet(onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    var haptics by remember { mutableStateOf(Prefs.haptics(ctx)) }
-    var opacity by remember { mutableFloatStateOf(Prefs.opacity(ctx)) }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
-            Text("Ajustes", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(16.dp))
-            ListItem(
-                headlineContent = { Text("Vibración al pulsar") },
-                trailingContent = {
-                    Switch(haptics, { haptics = it; Prefs.of(ctx).edit { putBoolean("haptics", it) } })
-                },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-            Text("Opacidad del control (horizontal): ${(opacity * 100).toInt()} %", Modifier.padding(start = 16.dp, top = 8.dp))
-            Slider(opacity, { opacity = it }, valueRange = 0.2f..1f,
-                onValueChangeFinished = { Prefs.of(ctx).edit { putFloat("opacity", opacity) } },
-                modifier = Modifier.padding(horizontal = 16.dp))
-            Text(
-                "Skins: importa un archivo .deltaskin con «+» y reemplaza la de su consola.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp),
-            )
-        }
-    }
+    fun hideSkinWithController(ctx: Context) = of(ctx).getBoolean("hideSkin", true)
+    fun fastForwardSpeed(ctx: Context) = of(ctx).getInt("ffSpeed", 3)
 }
 
 enum class PauseAction(val label: String, val icon: ImageVector) {

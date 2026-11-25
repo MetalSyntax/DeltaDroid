@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,13 +39,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.foundation.clickable
+import androidx.core.content.pm.ShortcutManagerCompat
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.File
-import java.util.zip.ZipFile
 
 class LibraryActivity : ComponentActivity() {
     private var games by mutableStateOf<List<Game>?>(null)
@@ -58,11 +61,44 @@ class LibraryActivity : ComponentActivity() {
         }
     }
 
+    /** Juego sobre el que actúan los selectores de archivo del menú contextual. */
+    private var target: Game? = null
+
+    private val pickCover = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val g = target ?: return@registerForActivityResult
+        uri ?: return@registerForActivityResult
+        io("Carátula cambiada") { contentResolver.openInputStream(uri)!!.use { i -> File(appDir("covers"), g.file.name).outputStream().use { i.copyTo(it) } } }
+    }
+    private val exportSave = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val g = target ?: return@registerForActivityResult
+        uri ?: return@registerForActivityResult
+        io("Partida exportada") { contentResolver.openOutputStream(uri)!!.use { o -> g.srm.inputStream().use { it.copyTo(o) } } }
+    }
+    private val importSave = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val g = target ?: return@registerForActivityResult
+        uri ?: return@registerForActivityResult
+        io("Partida importada") {
+            g.srm.parentFile!!.mkdirs()
+            contentResolver.openInputStream(uri)!!.use { i -> g.srm.outputStream().use { i.copyTo(it) } }
+        }
+    }
+
+    private fun io(ok: String, block: () -> Unit) = lifecycleScope.launch {
+        val r = withContext(Dispatchers.IO) { runCatching(block) }
+        reload()
+        snackbar.showSnackbar(r.exceptionOrNull()?.let { "Error: ${it.message}" } ?: ok)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        lifecycleScope.launch { reload() }
         setContent { LibraryScreen() }
+    }
+
+    // también al volver de Ajustes (un respaldo importado puede traer juegos nuevos)
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch { reload() }
     }
 
     private suspend fun reload() {
@@ -83,8 +119,10 @@ class LibraryActivity : ComponentActivity() {
         val current = systems.getOrNull(pager.currentPage)
         val accent by animateColorAsState(Color(current?.color ?: GameSystem.GBA.color), label = "accent")
         var query by rememberSaveable { mutableStateOf("") }
-        var settings by remember { mutableStateOf(false) }
         var toDelete by remember { mutableStateOf<Game?>(null) }
+        var actions by remember { mutableStateOf<Game?>(null) }
+        var renaming by remember { mutableStateOf<Game?>(null) }
+        var skinFor by remember { mutableStateOf<Game?>(null) }
 
         DeltaTheme(accent) {
             Box(Modifier.fillMaxSize().background(
@@ -95,7 +133,7 @@ class LibraryActivity : ComponentActivity() {
                     topBar = {
                         CenterAlignedTopAppBar(
                             title = { Text(current?.label ?: "DeltaDroid") },
-                            navigationIcon = { IconButton({ settings = true }) { Icon(Icons.Outlined.Settings, "Ajustes", tint = accent) } },
+                            navigationIcon = { IconButton({ startActivity(Intent(this@LibraryActivity, SettingsActivity::class.java)) }) { Icon(Icons.Outlined.Settings, "Ajustes", tint = accent) } },
                             actions = { IconButton({ pick.launch(arrayOf("*/*")) }) { Icon(Icons.Default.Add, "Importar", tint = accent) } },
                             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
                         )
@@ -129,7 +167,7 @@ class LibraryActivity : ComponentActivity() {
                                     verticalArrangement = Arrangement.spacedBy(18.dp),
                                     modifier = Modifier.fillMaxSize(),
                                 ) {
-                                    items(list, key = { it.file.name }) { g -> GameTile(g, accent, { play(g) }, { toDelete = g }) }
+                                    items(list, key = { it.file.name }) { g -> GameTile(g, accent, { play(g) }, { actions = g }) }
                                 }
                             }
                         }
@@ -144,13 +182,60 @@ class LibraryActivity : ComponentActivity() {
                     confirmButton = {
                         TextButton({
                             toDelete = null
+                            ShortcutManagerCompat.removeDynamicShortcuts(this@LibraryActivity, listOf(g.file.name))
                             lifecycleScope.launch { withContext(Dispatchers.IO) { Library.delete(this@LibraryActivity, g) }; reload() }
                         }) { Text("Borrar") }
                     },
                     dismissButton = { TextButton({ toDelete = null }) { Text("Cancelar") } },
                 )
             }
-            if (settings) SettingsSheet { settings = false }
+            actions?.let { g ->
+                GameActionsSheet(g, onDismiss = { actions = null }) { action ->
+                    actions = null
+                    target = g
+                    when (action) {
+                        GameAction.PLAY -> play(g)
+                        GameAction.RENAME -> renaming = g
+                        GameAction.COVER -> pickCover.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        GameAction.COVER_RESET -> io("Carátula restaurada") { File(filesDir, "covers/${g.file.name}").delete() }
+                        GameAction.SKIN -> skinFor = g
+                        GameAction.EXPORT_SAVE -> if (g.srm.exists()) exportSave.launch("${g.file.nameWithoutExtension}.sav")
+                            else lifecycleScope.launch { snackbar.showSnackbar("Este juego todavía no tiene partida guardada") }
+                        GameAction.IMPORT_SAVE -> importSave.launch(arrayOf("*/*"))
+                        GameAction.DELETE -> toDelete = g
+                    }
+                }
+            }
+            renaming?.let { g ->
+                var text by remember(g) { mutableStateOf(g.title) }
+                AlertDialog(
+                    onDismissRequest = { renaming = null },
+                    title = { Text("Renombrar") },
+                    text = { OutlinedTextField(text, { text = it }, singleLine = true) },
+                    confirmButton = { TextButton({ renaming = null; io("Renombrado") { Library.rename(this, g, text) } }) { Text("Guardar") } },
+                    dismissButton = { TextButton({ renaming = null; io("Nombre original") { Library.rename(this, g, "") } }) { Text("Original") } },
+                )
+            }
+            skinFor?.let { g ->
+                val skins = remember(g) { SkinStore.list(this, g.system) }
+                AlertDialog(
+                    onDismissRequest = { skinFor = null },
+                    title = { Text("Skin para «${g.title}»") },
+                    text = {
+                        Column {
+                            Text("La de la consola", Modifier.fillMaxWidth().clickable {
+                                SkinStore.choose(this@LibraryActivity, g.system, g.file, null); skinFor = null
+                            }.padding(vertical = 12.dp))
+                            skins.forEach { sk ->
+                                Text(sk.name, Modifier.fillMaxWidth().clickable {
+                                    SkinStore.choose(this@LibraryActivity, g.system, g.file, sk.file.name); skinFor = null
+                                }.padding(vertical = 12.dp))
+                            }
+                        }
+                    },
+                    confirmButton = { TextButton({ skinFor = null }) { Text("Cancelar") } },
+                )
+            }
         }
     }
 
@@ -206,15 +291,9 @@ class LibraryActivity : ComponentActivity() {
         if (name.endsWith(".deltaskin", true)) {
             val tmp = File(cacheDir, "import.deltaskin")
             copy(uri, tmp)
-            val system = runCatching {
-                ZipFile(tmp).use { z ->
-                    val info = JSONObject(z.getInputStream(z.getEntry("info.json")).reader().readText())
-                    GameSystem.byDeltaIdentifier(info.getString("gameTypeIdentifier"))
-                }
-            }.getOrNull() ?: return "$name: skin no válida o de un sistema no soportado".also { tmp.delete() }
-            val dest = File(filesDir, "skins/${system.id}.deltaskin").apply { parentFile!!.mkdirs() }
-            tmp.copyTo(dest, overwrite = true); tmp.delete()
-            return "Skin de ${system.label} instalada"
+            val system = SkinStore.import(this, tmp, name)
+            tmp.delete()
+            return system?.let { "Skin de ${it.label} agregada (elígela en Ajustes > Skins)" } ?: "$name: skin no válida o de un sistema no soportado"
         }
         GameSystem.byExt(name) ?: return "$name: formato no soportado"
         copy(uri, File(Library.romsDir(this), name))
@@ -226,4 +305,35 @@ class LibraryActivity : ComponentActivity() {
 
     private fun displayName(uri: Uri) = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
         ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+}
+
+enum class GameAction(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    PLAY("Jugar", Icons.Default.PlayArrow),
+    RENAME("Renombrar", Icons.Outlined.Edit),
+    COVER("Cambiar carátula", Icons.Outlined.Image),
+    COVER_RESET("Carátula original", Icons.Outlined.HideImage),
+    SKIN("Skin para este juego", Icons.Outlined.Gamepad),
+    EXPORT_SAVE("Exportar partida (.sav)", Icons.Outlined.Upload),
+    IMPORT_SAVE("Importar partida (.sav)", Icons.Outlined.Download),
+    DELETE("Borrar", Icons.Outlined.Delete),
+}
+
+/** Menú contextual del juego (Delta lo muestra con Haptic Touch; aquí con pulsación larga). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GameActionsSheet(g: Game, onDismiss: () -> Unit, onAction: (GameAction) -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Text(g.title, Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.titleLarge)
+        Text(g.system.label, Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(8.dp))
+        GameAction.entries.forEach { a ->
+            ListItem(
+                headlineContent = { Text(a.label, color = if (a == GameAction.DELETE) MaterialTheme.colorScheme.error else Color.Unspecified) },
+                leadingContent = { Icon(a.icon, null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.clickable { onAction(a) },
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+    }
 }
