@@ -2,7 +2,10 @@
 
 An Android (Kotlin) take on [Delta](https://github.com/rileytestut/Delta), the multi-system iOS emulator by Riley Testut, with the same skin-based look and feel.
 
-> DeltaDroid is an independent project. It is not affiliated with, endorsed by, or supported by Delta or Riley Testut.
+> [!IMPORTANT]
+> **Unofficial port.** DeltaDroid is a fan-made, unofficial port inspired by Delta. It is **not affiliated with, endorsed, sponsored or supported by Riley Testut, AltStore LLC or the Delta project**. "Delta" and the Delta logo belong to their respective owners. Please do not report DeltaDroid issues to the Delta project. No games, BIOS files or Delta skins are distributed with DeltaDroid.
+>
+> **Port no oficial.** DeltaDroid es un port no oficial hecho por fans, sin relación ni respaldo de Riley Testut, AltStore LLC ni del proyecto Delta.
 
 ## Features
 
