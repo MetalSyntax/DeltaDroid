@@ -1,34 +1,41 @@
 #!/usr/bin/env python3
-"""Ícono original de DeltaDroid / DeltaVita: degradado violeta-azul con un mando estilizado.
-No usa el logo de Delta. Uso: make_icon.py salida.png [tamaño]"""
+"""Ícono de DeltaDroid / DeltaVita: δ minúscula blanca y redondeada sobre degradado violeta (tono Delta).
+Dibujado aquí, no copia el logo de Delta. Uso: make_icon.py salida.png [tamaño]"""
 import sys
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+# SF Rounded en macOS; respaldo Helvetica negrita si no existe
+FONTS = [("/System/Library/Fonts/SFNSRounded.ttf", 0), ("/System/Library/Fonts/Helvetica.ttc", 1)]
+TOP, BOT = (184, 128, 255), (104, 46, 226)  # lavanda claro arriba-izquierda -> violeta profundo
+
+
+def glyph_font(px):
+    for path, idx in FONTS:
+        try:
+            f = ImageFont.truetype(path, px, index=idx)
+        except OSError:
+            continue
+        try:
+            f.set_variation_by_axes([800])  # Heavy
+        except Exception:
+            pass
+        return f
+    raise SystemExit("sin fuente con δ")
 
 
 def icon(size: int) -> Image.Image:
-    k = size / 1024
-    img = Image.new("RGB", (size, size))
-    d = ImageDraw.Draw(img)
-    top, bot = (124, 77, 255), (30, 136, 229)
-    for y in range(size):  # degradado diagonal aproximado
-        t = y / (size - 1)
-        d.line([(0, y), (size, y)], fill=tuple(int(a + (b - a) * t) for a, b in zip(top, bot)))
-    white = (255, 255, 255)
-    # cuerpo del mando
-    d.rounded_rectangle([170 * k, 330 * k, 854 * k, 700 * k], radius=185 * k, fill=white)
-    # empuñaduras
-    d.ellipse([170 * k, 470 * k, 430 * k, 800 * k], fill=white)
-    d.ellipse([594 * k, 470 * k, 854 * k, 800 * k], fill=white)
-    ink = (88, 60, 220)
-    # cruceta
-    cx, cy, a, b = 345 * k, 500 * k, 34 * k, 100 * k
-    d.rounded_rectangle([cx - a, cy - b, cx + a, cy + b], radius=12 * k, fill=ink)
-    d.rounded_rectangle([cx - b, cy - a, cx + b, cy + a], radius=12 * k, fill=ink)
-    # cuatro botones
-    for dx, dy in [(0, -70), (70, 0), (0, 70), (-70, 0)]:
-        x, y, r = 680 * k + dx * k, 500 * k + dy * k, 38 * k
-        d.ellipse([x - r, y - r, x + r, y + r], fill=ink)
-    return img
+    s = 1024  # se dibuja a 1024 y se escala: bordes limpios en cualquier tamaño
+    gv = Image.linear_gradient("L").resize((s, s))
+    grad = Image.blend(gv, gv.transpose(Image.ROTATE_90), 0.5)  # diagonal (x+y)/2
+    img = Image.composite(Image.new("RGB", (s, s), BOT), Image.new("RGB", (s, s), TOP), grad)
+
+    f = glyph_font(720)
+    mask = Image.new("L", (s, s))
+    ImageDraw.Draw(mask).text((s / 2, s / 2 + 20), "δ", font=f, fill=255, anchor="mm")
+    shadow = mask.filter(ImageFilter.GaussianBlur(28)).point(lambda v: v * 0.45)
+    img.paste((60, 20, 150), (0, 24), shadow)  # sombra suave hacia abajo
+    img.paste((255, 255, 255), (0, 0), mask)
+    return img.resize((size, size), Image.LANCZOS) if size != s else img
 
 
 if __name__ == "__main__":
